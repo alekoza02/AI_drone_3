@@ -1,18 +1,24 @@
+import math
+
 class Drone:
     def __init__(self, x, y):
+
+        self.size = 200
         self.pos = [x, y]
+        self.speed = [0, 0]
         self.rotation = 0
 
-        self.thrusters_power = [255, 255]
-        self.thrustets_rotations = [0, 0]
+        self.thrustets_center = [
+            [self.pos[0] - self.size_perc(0.7), self.pos[1]],
+            [self.pos[0] + self.size_perc(0.7), self.pos[1]]
+        ]
+        self.thrusters_power = [1, 1]
+        self.thrustets_rotations_local = [0, 0]
+        self.thrustets_rotations_global = [0, 0]
         
         self.angular_velocity = 0
-        self.velocity = [0, 0]
 
-        self.color_property_value = 255
-
-        # -----------------
-        self.size = 100
+        self.color_property_value = 1
 
     
     def size_perc(self, x):
@@ -43,9 +49,9 @@ class Drone:
                 ],
                 'color' : [self.color_property_value, 0, self.thrusters_power[0]],
                 'global_rotation' : self.rotation,
-                'local_rotation' : self.thrustets_rotations[0],
+                'local_rotation' : self.thrustets_rotations_local[0],
                 'global_position' : self.pos,
-                'local_position' : [self.pos[0] - self.size_perc(0.7), self.pos[1]], 
+                'local_position' : self.thrustets_center[0], 
             },
             'thr_2' : {
                 'verteces' : [
@@ -56,17 +62,66 @@ class Drone:
                 ],
                 'color' : [self.color_property_value, 0, self.thrusters_power[1]],
                 'global_rotation' : self.rotation,
-                'local_rotation' : self.thrustets_rotations[1],
+                'local_rotation' : self.thrustets_rotations_local[1],
                 'global_position' : self.pos,
-                'local_position' : [self.pos[0] + self.size_perc(0.7), self.pos[1]], 
+                'local_position' : self.thrustets_center[1], 
             }
         }
     
 
-    def set_orientation(self, corp_rotation, thr_rotation):
-        self.rotation = corp_rotation
-        self.thrustets_rotations = thr_rotation
+    def update_global_thruster_rotation(self):
+        self.thrustets_rotations_global[0] = self.rotation + self.thrustets_rotations_local[0]
+        self.thrustets_rotations_global[1] = self.rotation + self.thrustets_rotations_local[1]
 
-    
-    def set_position(self, position):
-        self.pos = position
+
+    def physics_simulation_step(self):
+
+        self.update_global_thruster_rotation()
+
+        thr_1_x = - self.thrusters_power[0] * math.cos(math.radians(self.thrustets_rotations_global[0]) + math.pi / 2)
+        thr_1_y = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_global[0]) + math.pi / 2)
+        thr_2_x = - self.thrusters_power[1] * math.cos(math.radians(self.thrustets_rotations_global[1]) + math.pi / 2)
+        thr_2_y = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_global[1]) + math.pi / 2)
+
+        output_direction = [
+            ((thr_1_x + thr_2_x) * 20),
+            ((thr_1_y + thr_2_y) * 20 + 9.81)
+        ]
+
+        self.pos[0] += output_direction[0]
+        self.pos[1] += output_direction[1]
+
+        self.speed = [output_direction[0] * 60, output_direction[1] * 60] # --->   / time = * FPS
+        
+        self.thrustets_center[0][0] += output_direction[0]
+        self.thrustets_center[0][1] += output_direction[1]
+        self.thrustets_center[1][0] += output_direction[0]
+        self.thrustets_center[1][1] += output_direction[1]
+
+        thr_1_y_loc = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_local[0]) + math.pi / 2)
+        thr_2_y_loc = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_local[1]) + math.pi / 2)
+
+        torque = (thr_2_y_loc - thr_1_y_loc) * 4
+
+        self.rotation += torque
+
+        self.angular_velocity = torque
+
+        torque_cos = math.cos(math.radians(torque))
+        torque_sin = math.sin(math.radians(torque))
+
+        x1 = self.thrustets_center[0][0] - self.pos[0]
+        y1 = self.thrustets_center[0][1] - self.pos[1]  
+        x2 = self.thrustets_center[1][0] - self.pos[0]
+        y2 = self.thrustets_center[1][1] - self.pos[1]
+
+        self.thrustets_center[0][0] = + x1 * torque_cos - y1 * torque_sin + self.pos[0]
+        self.thrustets_center[0][1] = + x1 * torque_sin + y1 * torque_cos + self.pos[1]
+        self.thrustets_center[1][0] = + x2 * torque_cos - y2 * torque_sin + self.pos[0]
+        self.thrustets_center[1][1] = + x2 * torque_sin + y2 * torque_cos + self.pos[1]
+                
+        self.thrustets_rotations_global[0] += torque
+        self.thrustets_rotations_global[1] += torque
+            
+        return [output_direction, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
+

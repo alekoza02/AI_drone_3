@@ -9,7 +9,9 @@ class Renderer:
         pygame.display.set_caption(title)
         self.bg_color = bg_color
         self.clock = pygame.time.Clock()
-
+        font_path = pygame.font.match_font("dejavusansmono")
+        self.font = pygame.font.Font(font_path, 18)
+        
 
     def clear(self):
         self.screen.fill(self.bg_color)
@@ -21,11 +23,15 @@ class Renderer:
 
 
     def render_polygon(self, points, color):    
-        pygame.draw.polygon(self.screen, color, points)
+        pygame.draw.polygon(self.screen, [x * 255 if x < 1 else 255 for x in color], points)
 
 
-    def render_point(self, point, color):
-        pygame.draw.circle(self.screen, color, point, 10)
+    def render_point(self, point, color, radius=10):
+        pygame.draw.circle(self.screen, color, point, radius)
+    
+
+    def render_line(self, start, end,  color, width=10):
+        pygame.draw.line(self.screen, color, start, end, width)
 
 
     def rotate_verteces(self, points, angle, rotation_center):
@@ -50,12 +56,24 @@ class Renderer:
         return rotated
 
 
+    def render_NN(self, pos, info):
+        
+        circles, links = info
+
+        for circle in circles:
+            color = [0, abs(circle['intensity']) / 2 * 255, 0]
+
+            self.render_point([pos[0] + circle['x'], pos[1] + circle['y']], color, circle['radius'])
+        
+        for link in links:
+            color = [0, link['intensity'] * 255, 255 - link['intensity'] * 255]
+            self.render_line([pos[0] + link['start'][0], pos[1] + link['start'][1]], [pos[0] + link['end'][0], pos[1] + link['end'][1]], color, max(1, int(5 * link['intensity'])))
+
     def render_drone(self, info):
         
         for key, value in info.items():
             verteces = value['verteces']
             verteces = self.rotate_verteces(verteces, value['global_rotation'], value['global_position'])
-            value['local_position'] = self.rotate_verteces([value['local_position']], value['global_rotation'], value['global_position'])[0]
             verteces = self.rotate_verteces(verteces, value['local_rotation'], value['local_position'])
             self.render_polygon(verteces, value['color'])
 
@@ -63,3 +81,13 @@ class Renderer:
         # for key, value in info.items():
         #     self.render_point(value['global_position'], [0, 255, 0])
         #     self.render_point(value['local_position'], [0, 0, 255])
+
+
+    def render_direction(self, pos, dir, scale=1):
+        pygame.draw.circle(self.screen, [100, 100, 255], pos, 10)
+        pygame.draw.line(self.screen, [100, 100, 255], pos, [pos[0] + dir[0] * scale, pos[1] + dir[1] * scale], 6)
+        
+
+    def render_text(self, text, antialias, color, pos):
+        text_surface = self.font.render(text, antialias, color)
+        self.screen.blit(text_surface, pos)
