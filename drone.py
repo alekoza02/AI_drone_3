@@ -3,7 +3,9 @@ import math
 class Drone:
     def __init__(self, x, y):
 
-        self.size = 200
+        self.reached_in_steps = 1e6
+
+        self.size = 100
         self.pos = [x, y]
         self.speed = [0, 0]
         self.rotation = 0
@@ -19,6 +21,8 @@ class Drone:
         self.angular_velocity = 0
 
         self.color_property_value = 1
+
+        self.debug_visuals = []
 
     
     def size_perc(self, x):
@@ -91,7 +95,7 @@ class Drone:
         self.pos[0] += output_direction[0]
         self.pos[1] += output_direction[1]
 
-        self.speed = [output_direction[0] * 60, output_direction[1] * 60] # --->   / time = * FPS
+        self.speed = [output_direction[0], output_direction[1]]
         
         self.thrustets_center[0][0] += output_direction[0]
         self.thrustets_center[0][1] += output_direction[1]
@@ -123,5 +127,5 @@ class Drone:
         self.thrustets_rotations_global[0] += torque
         self.thrustets_rotations_global[1] += torque
             
-        return [output_direction, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
+        self.debug_visuals = [output_direction, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
 

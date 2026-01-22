@@ -10,7 +10,7 @@ class Renderer:
         self.bg_color = bg_color
         self.clock = pygame.time.Clock()
         font_path = pygame.font.match_font("dejavusansmono")
-        self.font = pygame.font.Font(font_path, 18)
+        self.font = pygame.font.Font(font_path, 24)
         
 
     def clear(self):
@@ -61,7 +61,11 @@ class Renderer:
         circles, links = info
 
         for circle in circles:
-            color = [0, abs(circle['intensity']) / 2 * 255, 0]
+            value = circle['intensity'] / 4 * 255
+            if value > 0:
+                color = [0, value, 0]
+            else:
+                color = [- value, 0, 0]
 
             self.render_point([pos[0] + circle['x'], pos[1] + circle['y']], color, circle['radius'])
         
