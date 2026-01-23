@@ -5,7 +5,10 @@ class Drone:
 
         self.reached_in_steps = 1e6
 
-        self.size = 100
+        self.size = 50
+        self.mass = self.size * 2
+        self.thrusters_multiplier = 100
+        self.gravity = .981
         self.pos = [x, y]
         self.speed = [0, 0]
         self.rotation = 0
@@ -14,7 +17,7 @@ class Drone:
             [self.pos[0] - self.size_perc(0.7), self.pos[1]],
             [self.pos[0] + self.size_perc(0.7), self.pos[1]]
         ]
-        self.thrusters_power = [1, 1]
+        self.thrusters_power = [0, 0]
         self.thrustets_rotations_local = [0, 0]
         self.thrustets_rotations_global = [0, 0]
         
@@ -51,7 +54,7 @@ class Drone:
                     [self.pos[0] - self.size_perc(0.5) - self.size_perc(0.1), self.pos[1] + self.size_perc(0.3)],
                     [self.pos[0] - self.size_perc(0.5) - self.size_perc(0.1), self.pos[1] - self.size_perc(0.3)],
                 ],
-                'color' : [1 if self.thrusters_power[0] > 1 else self.thrusters_power[0], self.thrusters_power[0] if self.thrusters_power[0] < 1 else 0, 0],
+                'color' : [1 if self.thrusters_power[0] > 1 else 0, self.thrusters_power[0] if self.thrusters_power[0] < 1 else 0, 0],
                 'global_rotation' : self.rotation,
                 'local_rotation' : self.thrustets_rotations_local[0],
                 'global_position' : self.pos,
@@ -64,7 +67,7 @@ class Drone:
                     [self.pos[0] + self.size_perc(0.5) + self.size_perc(0.1), self.pos[1] + self.size_perc(0.3)],
                     [self.pos[0] + self.size_perc(0.5) + self.size_perc(0.1), self.pos[1] - self.size_perc(0.3)],
                 ],
-                'color' : [1 if self.thrusters_power[1] > 1 else self.thrusters_power[1], self.thrusters_power[1] if self.thrusters_power[1] < 1 else 0, 0],
+                'color' : [1 if self.thrusters_power[1] > 1 else 0, self.thrusters_power[1] if self.thrusters_power[1] < 1 else 0, 0],
                 'global_rotation' : self.rotation,
                 'local_rotation' : self.thrustets_rotations_local[1],
                 'global_position' : self.pos,
@@ -82,34 +85,38 @@ class Drone:
 
         self.update_global_thruster_rotation()
 
+        # TRASLATION        
         thr_1_x = - self.thrusters_power[0] * math.cos(math.radians(self.thrustets_rotations_global[0]) + math.pi / 2)
         thr_1_y = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_global[0]) + math.pi / 2)
         thr_2_x = - self.thrusters_power[1] * math.cos(math.radians(self.thrustets_rotations_global[1]) + math.pi / 2)
         thr_2_y = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_global[1]) + math.pi / 2)
 
-        output_direction = [
-            ((thr_1_x + thr_2_x) * 20),
-            ((thr_1_y + thr_2_y) * 20 + 9.81)
+        self.speed[0] += self.thrusters_multiplier * (thr_1_x + thr_2_x) / self.mass
+        self.speed[1] += self.thrusters_multiplier * (thr_1_y + thr_2_y) / self.mass + self.gravity
+
+        delta_space_vector = [
+            self.speed[0],
+            self.speed[1],
         ]
 
-        self.pos[0] += output_direction[0]
-        self.pos[1] += output_direction[1]
+        self.pos[0] += delta_space_vector[0]
+        self.pos[1] += delta_space_vector[1]
 
-        self.speed = [output_direction[0], output_direction[1]]
-        
-        self.thrustets_center[0][0] += output_direction[0]
-        self.thrustets_center[0][1] += output_direction[1]
-        self.thrustets_center[1][0] += output_direction[0]
-        self.thrustets_center[1][1] += output_direction[1]
+        self.thrustets_center[0][0] += delta_space_vector[0]
+        self.thrustets_center[0][1] += delta_space_vector[1]
+        self.thrustets_center[1][0] += delta_space_vector[0]
+        self.thrustets_center[1][1] += delta_space_vector[1]
 
-        thr_1_y_loc = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_local[0]) + math.pi / 2)
-        thr_2_y_loc = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_local[1]) + math.pi / 2)
 
-        torque = (thr_2_y_loc - thr_1_y_loc) * 4
+        # ROTATION
+        thr_1_tg = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_local[0]) + math.pi / 2)
+        thr_2_tg = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_local[1]) + math.pi / 2)
+
+        torque = (thr_2_tg - thr_1_tg)
 
         self.rotation += torque
 
-        self.angular_velocity = torque
+        self.angular_velocity += torque 
 
         torque_cos = math.cos(math.radians(torque))
         torque_sin = math.sin(math.radians(torque))
@@ -127,5 +134,5 @@ class Drone:
         self.thrustets_rotations_global[0] += torque
         self.thrustets_rotations_global[1] += torque
             
-        self.debug_visuals = [output_direction, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
+        self.debug_visuals = [delta_space_vector, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
 

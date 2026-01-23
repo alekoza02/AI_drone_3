@@ -61,14 +61,17 @@ class Renderer:
         circles, links = info
 
         for circle in circles:
-            value = circle['intensity'] / 4 * 255
+            value = circle['intensity'] * 255
             v = int(max(-255, min(255, value)))
-            color = [0, v, 0] if v >= 0 else [-v, 0, 0]
+            color = [v / 2, v, v / 2] if v >= 0 else [-v, -v / 2, -v / 2]
 
             self.render_point([pos[0] + circle['x'], pos[1] + circle['y']], color, circle['radius'])
         
         for link in links:
-            color = [0, link['intensity'] * 255, 255 - link['intensity'] * 255]
+            value = (link['intensity'] * 2 - 1) * 255
+            v = int(max(-255, min(255, value)))
+            color = [v / 2, v, v / 2] if v >= 0 else [-v, -v / 2, -v / 2]
+            
             self.render_line([pos[0] + link['start'][0], pos[1] + link['start'][1]], [pos[0] + link['end'][0], pos[1] + link['end'][1]], color, max(1, int(5 * link['intensity'])))
 
     def render_drone(self, info):

@@ -22,29 +22,30 @@ class NeuralNetwork:
 
 
     def construct_empty(self):
-        self.input_layer_w: list[float] = [[random() * 2 - 1 for i in range(9)] for j in range(7)]
-        self.input_layer_s: list[float] = [0 for i in range(7)]
         self.input_layer_n: int = 7
+        self.hidden_layer1_n: int = 9
+        self.hidden_layer2_n: int = 9
+        self.output_layer_n: int = 4
+
+        self.input_layer_w: list[float] = [[random() * 2 - 1 for i in range(self.hidden_layer1_n)] for j in range(self.input_layer_n)]
+        self.input_layer_s: list[float] = [0 for i in range(self.input_layer_n)]
 
         self.links_visual_intensity1 = []
 
-        self.hidden_layer1_w = [[random() * 2 - 1 for i in range(9)] for i in range(9)]
-        self.hidden_layer1_b = [random() * 2 - 1 for i in range(9)]
-        self.hidden_layer1_s = [0 for i in range(9)]
-        self.hidden_layer1_n: int = 9
+        self.hidden_layer1_w = [[random() * 2 - 1 for i in range(self.hidden_layer2_n)] for i in range(self.hidden_layer1_n)]
+        self.hidden_layer1_b = [random() * 2 - 1 for i in range(self.hidden_layer1_n)]
+        self.hidden_layer1_s = [0 for i in range(self.hidden_layer1_n)]
         
         self.links_visual_intensity2 = []
 
-        self.hidden_layer2_w = [[random() * 2 - 1 for i in range(4)] for i in range(9)]
-        self.hidden_layer2_b = [random() * 2 - 1 for i in range(9)]
-        self.hidden_layer2_s = [0 for i in range(9)]
-        self.hidden_layer2_n: int = 9
+        self.hidden_layer2_w = [[random() * 2 - 1 for i in range(self.output_layer_n)] for i in range(self.hidden_layer2_n)]
+        self.hidden_layer2_b = [random() * 2 - 1 for i in range(self.hidden_layer2_n)]
+        self.hidden_layer2_s = [0 for i in range(self.hidden_layer2_n)]
         
         self.links_visual_intensity3 = []
 
-        self.output_layer_s = [0 for i in range(4)]
-        self.output_layer_b = [random() * 2 - 1 for i in range(4)]
-        self.output_layer_n: int = 4
+        self.output_layer_s = [0 for i in range(self.output_layer_n)]
+        self.output_layer_b = [random() * 2 - 1 for i in range(self.output_layer_n)]
 
 
     def IA_step(self, inputs):
@@ -54,10 +55,10 @@ class NeuralNetwork:
         self.links_visual_intensity2 = [[0 for i in range(self.hidden_layer1_n)] for j in range(self.hidden_layer2_n)]
         self.links_visual_intensity3 = [[0 for i in range(self.hidden_layer2_n)] for j in range(self.output_layer_n)]
 
-        self.input_layer_s: list[float] = [0 for i in range(7)]
-        self.hidden_layer1_s = [0 for i in range(9)]
-        self.hidden_layer2_s = [0 for i in range(9)]
-        self.output_layer_s = [0 for i in range(4)]
+        self.input_layer_s: list[float] = [0 for i in range(self.input_layer_n)]
+        self.hidden_layer1_s = [0 for i in range(self.hidden_layer1_n)]
+        self.hidden_layer2_s = [0 for i in range(self.hidden_layer2_n)]
+        self.output_layer_s = [0 for i in range(self.output_layer_n)]
 
         # data loading
         for i in range(self.input_layer_n):
@@ -110,14 +111,14 @@ class NeuralNetwork:
         true_size_y = size_y - padding * 2
 
         subdivision_x = true_size_x / 4
-        subdivision_y = true_size_y / 9
+        subdivision_y = true_size_y / max(self.input_layer_n, self.hidden_layer1_n, self.hidden_layer2_n, self.output_layer_n)
 
         circles = []
 
         circles_input = [
             {
                 'x' : padding + 0 * subdivision_x + subdivision_x / 2,
-                'y' : padding + (i + 1) * subdivision_y + subdivision_y / 2,
+                'y' : padding + i * subdivision_y + subdivision_y / 2,
                 'intensity' : self.input_layer_s[i],
                 'radius' : min(subdivision_x, subdivision_y) / 2.2
             } for i in range(self.input_layer_n)
@@ -141,7 +142,7 @@ class NeuralNetwork:
         circles_output = [
             {
                 'x' : padding + 3 * subdivision_x + subdivision_x / 2,
-                'y' : padding + (i + 2) * subdivision_y + subdivision_y / 2,
+                'y' : padding + i * subdivision_y + subdivision_y / 2,
                 'intensity' : self.output_layer_s[i],
                 'radius' : min(subdivision_x, subdivision_y) / 2.2
             } for i in range(self.output_layer_n)
@@ -164,7 +165,7 @@ class NeuralNetwork:
         links_input_hidden1 = [
             {
                 'start' : [padding + 1 * subdivision_x + subdivision_x / 2, padding + j * subdivision_y + subdivision_y / 2],
-                'end' : [padding + 0 * subdivision_x + subdivision_x / 2, padding + (i + 1) * subdivision_y + subdivision_y / 2],
+                'end' : [padding + 0 * subdivision_x + subdivision_x / 2, padding + i * subdivision_y + subdivision_y / 2],
                 'intensity' : self.links_visual_intensity1[j][i],
             } for j in range(self.hidden_layer1_n) for i in range(self.input_layer_n)
         ]
@@ -193,7 +194,7 @@ class NeuralNetwork:
 
         links_hidden2_output = [
             {
-                'start' : [padding + 3 * subdivision_x + subdivision_x / 2, padding + (j + 2) * subdivision_y + subdivision_y / 2],
+                'start' : [padding + 3 * subdivision_x + subdivision_x / 2, padding + j * subdivision_y + subdivision_y / 2],
                 'end' : [padding + 2 * subdivision_x + subdivision_x / 2, padding + i * subdivision_y + subdivision_y / 2],
                 'intensity' : self.links_visual_intensity3[j][i],
             } for j in range(self.output_layer_n) for i in range(self.hidden_layer2_n)

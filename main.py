@@ -6,24 +6,37 @@ from arena import *
 
 from time import perf_counter_ns
 
+PROFILING = False
+
+if PROFILING:
+    import yappi
+    yappi.start()
+
 W, H = 2000, 1000
 
-N_agents = 512
-max_training_steps = 1024
-N_epoch = 2 ** 4
-N_evolutions = 32
+force_no_render = False
+visual_update = 1
+dt_frame = 1
+elapsed = 0
+running = True
 
-r: Renderer = Renderer(W, H)
+N_agents = 2 ** 10
+max_training_steps = 1024
+N_epoch = 2 ** 13
+N_evolutions = 8
+
+TRAIN = 1
+PLAY = 0
+
+if not force_no_render:
+    r: Renderer = Renderer(W, H)
+else: 
+    r = None
 
 arena = Arena(N_agents, N_epoch, max_training_steps, N_evolutions, [W/2, H/2])
 arena.set_simulation_world_size([W, H])
-arena.set_goal([0.75 * W, 0.75 * H])
+arena.set_goal([0.75 * W, 0.25 * H])
 
-dt_frame = 1
-running = True
-
-TRAIN = 1
-PLAY = 1
 
 if TRAIN:
 
@@ -31,16 +44,17 @@ if TRAIN:
         
         start_dt = perf_counter_ns()
 
-        for event in pygame.event.get():
+        if not force_no_render:
+            for event in pygame.event.get():
 
-            if event.type == pygame.QUIT:
-                running = arena.training_finished
+                if event.type == pygame.QUIT:
+                    running = arena.training_finished
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
-                    arena = Arena(N_agents, N_epoch, max_training_steps, N_evolutions, [W/2, H/2])
-                    arena.set_simulation_world_size([W, H])
-                    arena.set_goal([0.86 * W, 0.13 * H])
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:
+                        arena = Arena(N_agents, N_epoch, max_training_steps, N_evolutions, [W/2, H/2])
+                        arena.set_simulation_world_size([W, H])
+                        arena.set_goal([0.86 * W, 0.13 * H])
         
         if arena.current_step < arena.max_steps and not arena.force_new_epoch:
             arena.train_single_step()
@@ -54,32 +68,43 @@ if TRAIN:
                 arena.train_single_step()
 
         start_render = perf_counter_ns()
-        r.clear()
+        
+        if not force_no_render:
+            r.clear()
         
         # WHOLE SWARM
-        if arena.current_epoch % 32 == 0:
+        if arena.current_epoch % visual_update == 0 and not force_no_render:
             for drone in arena.agents_drone:
                 r.render_drone(drone.get_drone_visual_info())
                 r.render_direction(drone.pos, drone.debug_visuals[0], scale=10)
                 r.render_direction(drone.thrustets_center[0], drone.debug_visuals[1], scale=100)
                 r.render_direction(drone.thrustets_center[1], drone.debug_visuals[2], scale=100)
             
-            r.render_NN([0, 3 * H / 4], arena.agents_NN[arena.best_scores_indices[0]].get_NN_visual_info(W / 4, H / 4))
+            r.render_NN([0, 2 * H / 3], arena.agents_NN[arena.best_scores_indices[0]].get_NN_visual_info(W / 3, H / 3))
 
             r.render_point(arena.destination, [255, 255, 0])
         
         stop_render = perf_counter_ns()
 
-        r.render_text(f" ACTIVE {sum(arena.agents_mask):<5} | IA {(arena.timings_ia / arena.timings_sample) / 1000:3.0f}us | PHYSICS {(arena.timings_physics / arena.timings_sample) / 1000:4.0f}us | RENDER {(stop_render - start_render) / 1000:5.0f}us | FPS {1 / (dt_frame * 1e-9):5.0f} | EPOCHS {arena.current_epoch} / {arena.n_epoch} | STEPS {arena.current_step} / {arena.max_steps} | BEST SCORE {arena.agents_scores[arena.best_scores_indices[0]]:.4f}", True, (255, 255, 255), (0, 0))
-        r.update(0)
+        if not force_no_render:
+            r.render_text(f" ACTIVE {sum(arena.agents_mask):<5} | IA {(arena.timings_ia) / 1000000:3.0f}ms | PHYSICS {(arena.timings_physics) / 1000000:4.0f}ms | RENDER {(stop_render - start_render) / 1000:5.0f}us | FPS {1 / (dt_frame * 1e-9):5.0f} | EPOCHS {arena.current_epoch} / {arena.n_epoch} | STEPS {arena.current_step} / {arena.max_steps} | BEST SCORE {arena.agents_scores[arena.best_scores_indices[0]]:.4f}", True, (255, 255, 255), (0, 0))
+            r.update(0)
+
+        elif elapsed > 1000:
+            elapsed = 0
+            print(f"\r ACTIVE {sum(arena.agents_mask):<5} | IA {(arena.timings_ia) / 1000000:3.0f}ms | PHYSICS {(arena.timings_physics) / 1000000:4.0f}ms | RENDER {(stop_render - start_render) / 1000:5.0f}us | FPS {1 / (dt_frame * 1e-9):5.0f} | EPOCHS {arena.current_epoch} / {arena.n_epoch} | STEPS {arena.current_step} / {arena.max_steps} | BEST SCORE {arena.agents_scores[arena.best_scores_indices[0]]:.4f}          ", end="")
 
         stop_dt = perf_counter_ns()
         dt_frame = stop_dt - start_dt
+        elapsed += dt_frame / 1e6
 
 
 if PLAY:
     drone = Drone(W*0.5, H*0.5)
     agent = arena.load_best_NN('new_best_neuron.pkl')
+
+    if r is None:
+        r: Renderer = Renderer(W, H)
 
     while running:
         
@@ -117,3 +142,8 @@ if PLAY:
         dt_frame = stop_dt - start_dt
 
     pygame.quit()
+
+if PROFILING:
+    yappi.stop()
+    func_stats = yappi.get_func_stats()
+    func_stats.save('profilatore.prof', type='pstat') 
