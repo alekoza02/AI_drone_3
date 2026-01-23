@@ -87,13 +87,21 @@ class NeuralNetwork:
         return self.output_layer_s
 
 
-    def activation_function(self, value):
-        # RElu
-        # return 0 if value < 0 else value
+    def activation_function(self, value, type=0):
+    
+        # Allow negative values (avoid overflow)
+        if type == 0:
+            return 2.0 / (1.0 + exp(-max(-60.0, min(60.0, value)))) - 1.0
     
         # Sigmoid
-        return 1.0 / (1.0 + exp(-value))
+        if type == 1:
+            return 1.0 / (1.0 + exp(-value))
     
+        # RElu
+        if type == 2:
+            return 0 if value < 0 else value
+    
+
 
     def get_NN_visual_info(self, size_x, size_y):
         

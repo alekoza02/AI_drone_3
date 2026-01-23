@@ -62,10 +62,8 @@ class Renderer:
 
         for circle in circles:
             value = circle['intensity'] / 4 * 255
-            if value > 0:
-                color = [0, value, 0]
-            else:
-                color = [- value, 0, 0]
+            v = int(max(-255, min(255, value)))
+            color = [0, v, 0] if v >= 0 else [-v, 0, 0]
 
             self.render_point([pos[0] + circle['x'], pos[1] + circle['y']], color, circle['radius'])
         
