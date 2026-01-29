@@ -2,14 +2,15 @@ from neural_network import *
 from drone import *
 
 import pickle
-from random import random
-from math import sin, cos, radians
+from random import random, randint
+from math import sin, cos, radians, sqrt
 from time import perf_counter_ns
+import copy
+
 
 class Arena:
-    def __init__(self, n_agents=10, n_epoch=10, max_steps=200, n_mutations_per_evolution=1, drone_starting_position=[0, 0]):
+    def __init__(self, n_agents=10, n_epoch=10, max_steps=200, drone_starting_position=[0, 0]):
         
-        self.n_mutations_per_evolution = n_mutations_per_evolution
         self.n_agents = n_agents
         self.n_epoch = n_epoch
         self.max_steps = max_steps
@@ -17,19 +18,17 @@ class Arena:
         self.current_epoch = 0
         self.training_finished = False
         self.force_new_epoch = False
+        self.best_prev_score = 0
 
         self.arena_size = [400, 300]
-        self.destination = [0, 0]
-
-        self.max_inputs = [-1e6 for _ in range(7)]
-        self.min_inputs = [1e6 for _ in range(7)]
+        self.destinations = None
         
         self.start_next_epoch()
 
 
-
     def set_goal(self, goal):
-        self.destination = goal
+        self.destinations = goal
+        [drone.set_destination(self.destinations[0]) for drone in self.agents_drone]
 
 
     def set_simulation_world_size(self, size):
@@ -49,13 +48,19 @@ class Arena:
                 reverse=True
             )
 
+            self.best_prev_score = self.agents_scores[self.best_scores_indices[0]]
+
             return
         
         for agent, drone, index in zip(self.agents_NN, self.agents_drone, range(self.n_agents)):
-            if drone.pos[0] < - self.arena_size[0] * 0.2 or drone.pos[0] > self.arena_size[0] * 1.2 or drone.pos[1] < - self.arena_size[1] * 0.2 or drone.pos[1] > self.arena_size[1] * 1.2:
+            if self.agents_mask[index] and (drone.pos[0] < - self.arena_size[0] * 0.2 or drone.pos[0] > self.arena_size[0] * 1.2 or drone.pos[1] < - self.arena_size[1] * 0.2 or drone.pos[1] > self.arena_size[1] * 1.2):
+                self.agents_scores[index] += -0.1
                 self.agents_mask[index] = False
                 
             if self.agents_mask[index]:
+
+                if self.current_step == (self.max_steps - 1):
+                    self.agents_scores[index] += 50 # alive bonus
 
                 delta_ia, delta_physics = self.raw_step(drone, agent)
 
@@ -63,38 +68,53 @@ class Arena:
                 self.timings_physics += delta_physics
                 self.timings_sample += 1
 
+                self.agents_scores[index] += self.compute_reward(drone)
 
-                distance = ((self.destination[0] - drone.pos[0])**2 + (self.destination[1] - drone.pos[1])**2)**0.5
 
-                fitness = 0
+    def compute_reward(self, drone: Drone):
+        # Parameters
+        target_radius = 10.0          # radius around the target to consider "at target"
+        target_time = 5.0             # time to accumulate full reward at target
 
-                if distance < 10:
-                    fitness += self.max_steps - self.current_step          # fast arrival dominates
-                                               
-                fitness += -(distance / (self.arena_size[0] ** 2 + self.arena_size[1] ** 2) ** 0.5) ** 2                         # dense shaping toward target
-                fitness *= cos(radians(drone.rotation)) ** 2
-                self.agents_scores[index] += fitness
+        # Distance to current target
+        dx = drone.destination[0] - drone.pos[0]
+        dy = drone.destination[1] - drone.pos[1]
+        dist = (dx**2 + dy**2)**0.5
 
-            else:
-                self.agents_scores[index] = -1e12
+        # Base reward: inverse distance
+        r = 1.0 / (1.0 + dist)
+
+        # # Incremental "time at target" tracking
+        if dist < target_radius:
+            drone.steps_at_destination += 1
+            # If enough time spent at target, advance to next
+            if drone.steps_at_destination >= target_time:
+                drone.destinations_reached += 1
+                if drone.destinations_reached < len(self.destinations):
+                    r += 10
+                    drone.set_destination(self.destinations[drone.destinations_reached])
+                drone.steps_at_destination = 0
+        else:
+            # Not at target, reset accumulated time
+            drone.steps_at_destination = 0
+
+        return r
+
 
 
     def start_next_epoch(self):
             
-        self.set_goal([random() * self.arena_size[0], random() * self.arena_size[1]])
+        # self.set_goal([random() * self.arena_size[0], random() * self.arena_size[1]])
+
+        self.evolve()
 
         self.agents_drone = [Drone(self.drone_starting_position[0], self.drone_starting_position[1]) for _ in range(self.n_agents)]
+        if not self.destinations is None:
+            [drone.set_destination(self.destinations[0]) for drone in self.agents_drone]
         self.agents_scores = [0 for _ in range(self.n_agents)]
         self.best_scores_indices = [0 for i in range(self.n_agents)]
         self.agents_mask = [True for _ in range(self.n_agents)]
-
-        if self.force_new_epoch:
-            # failed miseraly, heavy randomicity
-            self.evolve(double_down_on_mutations=True)
-        else:
-            self.evolve()
         
-
         self.timings_ia = 0
         self.timings_physics = 0
         self.timings_sample = 0.00001
@@ -102,70 +122,129 @@ class Arena:
         self.force_new_epoch = False
         self.current_step = 0
 
+        self.max_inputs = [-1e6 for _ in range(7)]
+        self.min_inputs = [1e6 for _ in range(7)]
+        self.max_outputs = [-1e6 for _ in range(7)]
+        self.min_outputs = [1e6 for _ in range(7)]
 
-    def evolve(self, double_down_on_mutations=False):
+
+    def evolve(self):
 
         if self.current_epoch == 0:
             self.agents_NN = [NeuralNetwork() for _ in range(self.n_agents)]
+            return
 
-        else:
+        N = self.n_agents
+        ELITES = max(4, int(self.n_agents * 0.1))
+        TOURNAMENT_K = 3
 
-            import copy; order = [copy.deepcopy(self.agents_NN[i]) for i in self.best_scores_indices]
+        MUT_P = 0.05          # per-parameter mutation probability
+        MUT_SIGMA = 0.01       # mutation std
+        W_MAX = 3.0           # weight/bias clamp
 
-            quarter_index = len(order) // 4  # first 25% of the array
-            first_quarter = order[:quarter_index]
-            new_generation = [copy.deepcopy(agent) for agent in first_quarter for _ in range(4)]
+        # ---------- helpers ----------
 
-            multiplier = 1024 if double_down_on_mutations else 1
+        def tournament_select(ranked):
+            best_i = None
+            best_score = -1e18
+            for _ in range(TOURNAMENT_K):
+                i = randint(0, N - 1)
+                if self.agents_scores[ranked[i]] > best_score:
+                    best_score = self.agents_scores[ranked[i]]
+                    best_i = i
+            return self.agents_NN[ranked[best_i]]
 
-            for i in range(self.n_mutations_per_evolution * multiplier):
-                for i in range(int(0.25 * self.n_agents), self.n_agents):
-                    
-                    layer_choice = random()
-                    node_choice = random()
-                    link_choice = random()
+        def crossover(a, b):
+            child = copy.deepcopy(a)
 
-                    if layer_choice < 0.33:
-                        
-                        # weight
-                        layer_size = new_generation[i].input_layer_n
-                        link_size = new_generation[i].hidden_layer1_n
-                        node_index = int(node_choice * layer_size)
-                        link_index = int(link_choice * link_size)
-                        new_generation[i].input_layer_w[node_index][link_index] += max(-2.0, min(2.0, new_generation[i].input_layer_w[node_index][link_index] + (random() - 0.5) * 0.1))
-                                
-                    elif layer_choice < 0.66:
-                        
-                        # weight
-                        layer_size = new_generation[i].hidden_layer1_n
-                        link_size = new_generation[i].hidden_layer2_n
-                        node_index = int(node_choice * layer_size)
-                        link_index = int(link_choice * link_size)
-                        new_generation[i].hidden_layer1_w[node_index][link_index] += max(-2.0, min(2.0, new_generation[i].hidden_layer1_w[node_index][link_index] + (random() - 0.5) * 0.1))
-                    
-                    elif layer_choice < 1:
-                        
-                        # weight
-                        layer_size = new_generation[i].hidden_layer2_n
-                        link_size = new_generation[i].output_layer_n
-                        node_index = int(node_choice * layer_size)
-                        link_index = int(link_choice * link_size)
-                        new_generation[i].hidden_layer2_w[node_index][link_index] += max(-2.0, min(2.0, new_generation[i].hidden_layer2_w[node_index][link_index] + (random() - 0.5) * 0.1))
+            for wA, wB, wC in zip(a.input_layer_w, b.input_layer_w, child.input_layer_w):
+                for i in range(len(wC)):
+                    wC[i] = wA[i] if random() < 0.5 else wB[i]
 
-            self.agents_NN = new_generation
+            for wA, wB, wC in zip(a.hidden_layer1_w, b.hidden_layer1_w, child.hidden_layer1_w):
+                for i in range(len(wC)):
+                    wC[i] = wA[i] if random() < 0.5 else wB[i]
+
+            for wA, wB, wC in zip(a.hidden_layer2_w, b.hidden_layer2_w, child.hidden_layer2_w):
+                for i in range(len(wC)):
+                    wC[i] = wA[i] if random() < 0.5 else wB[i]
+
+            for i in range(len(child.hidden_layer1_b)):
+                child.hidden_layer1_b[i] = (
+                    a.hidden_layer1_b[i] if random() < 0.5 else b.hidden_layer1_b[i]
+                )
+
+            for i in range(len(child.hidden_layer2_b)):
+                child.hidden_layer2_b[i] = (
+                    a.hidden_layer2_b[i] if random() < 0.5 else b.hidden_layer2_b[i]
+                )
+
+            for i in range(len(child.output_layer_b)):
+                child.output_layer_b[i] = (
+                    a.output_layer_b[i] if random() < 0.5 else b.output_layer_b[i]
+                )
+
+            return child
+
+        def mutate(nn):
+            def mutate_matrix(M):
+                for i in range(len(M)):
+                    for j in range(len(M[i])):
+                        if random() < MUT_P:
+                            M[i][j] += (random() * 2 - 1) * MUT_SIGMA
+                            M[i][j] = max(-W_MAX, min(W_MAX, M[i][j]))
+
+            def mutate_vector(v):
+                for i in range(len(v)):
+                    if random() < MUT_P:
+                        v[i] += (random() * 2 - 1) * MUT_SIGMA
+                        v[i] = max(-W_MAX, min(W_MAX, v[i]))
+
+            mutate_matrix(nn.input_layer_w)
+            mutate_matrix(nn.hidden_layer1_w)
+            mutate_matrix(nn.hidden_layer2_w)
+
+            mutate_vector(nn.hidden_layer1_b)
+            mutate_vector(nn.hidden_layer2_b)
+            mutate_vector(nn.output_layer_b)
+
+        # ---------- evolution ----------
+
+        ranked = sorted(
+            range(N),
+            key=lambda i: self.agents_scores[i],
+            reverse=True
+        )
+
+        new_population = []
+
+        # elites
+        for i in range(ELITES):
+            new_population.append(copy.deepcopy(self.agents_NN[ranked[i]]))
+
+        # offspring
+        while len(new_population) < N:
+            p1 = tournament_select(ranked)
+            p2 = tournament_select(ranked)
+            child = crossover(p1, p2)
+            mutate(child)
+            new_population.append(child)
+
+        self.agents_NN = new_population
+
 
 
     def raw_step(self, drone, agent):
 
 
         inputs = [
-            (self.destination[0] - drone.pos[0]) / self.arena_size[0],   # 1) to target X        
-            (self.destination[1] - drone.pos[1]) / self.arena_size[1],   # 2) to target Y        
-            drone.speed[0] / 100,                          # 3) speed X        
-            drone.speed[1] / 100,                          # 4) speed Y        
+            (drone.destination[0] - drone.pos[0]) / self.arena_size[0],   # 1) to target X        
+            (drone.destination[1] - drone.pos[1]) / self.arena_size[1],   # 2) to target Y        
+            drone.speed[0] / 200,                          # 3) speed X        
+            drone.speed[1] / 200,                          # 4) speed Y        
             cos(radians(drone.rotation)),                   # 5) cos angle        
             sin(radians(drone.rotation)),                   # 6) sin angle
-            drone.angular_velocity / 200,                         # 7) angular speed
+            drone.angular_velocity / 2000,                         # 7) angular speed
         ]
 
         self.max_inputs = [
@@ -179,9 +258,16 @@ class Arena:
         output = agent.IA_step(inputs)
         stop_ia = perf_counter_ns()
         
+        self.max_outputs = [
+            max(i, j) for i, j in zip(self.max_outputs, output)
+        ]
+        self.min_outputs = [
+            min(i, j) for i, j in zip(self.min_outputs, output)
+        ]
+        
         # TODO ---> Need appropriate mapping
-        drone.thrusters_power = [min(1, (max(0, output[0] * 0.1 + drone.thrusters_power[0]))), min(1, (max(0, output[2] * 0.1 + drone.thrusters_power[1])))]
-        drone.thrustets_rotations_local = [min(45, max(-45, output[1] * 1 + drone.thrustets_rotations_local[0])), min(45, max(-45, output[3] * 1 + drone.thrustets_rotations_local[1]))]
+        drone.thrusters_power = [drone.thrusters_power[0] + min(0.2, max(-0.2, (output[0] + 1) * 0.5 - drone.thrusters_power[0])), drone.thrusters_power[1] + min(0.2, max(-0.2, (output[2] + 1) * 0.5 - drone.thrusters_power[1]))]
+        drone.thrustets_rotations_local = [drone.thrustets_rotations_local[0] + min(5, max(-5, output[1] * 45 - drone.thrustets_rotations_local[0])), drone.thrustets_rotations_local[1] + min(5, max(-5, output[3] * 45 - drone.thrustets_rotations_local[1]))]
 
         start_physics = perf_counter_ns()    
         _ = drone.physics_simulation_step()

@@ -78,7 +78,7 @@ class NeuralNetwork:
                 self.hidden_layer2_s[i] += self.links_visual_intensity2[i][j]
             self.hidden_layer2_s[i] = self.activation_function(self.hidden_layer2_s[i] + self.hidden_layer2_b[i])
         
-        # output hidden layer
+        # output layer
         for i in range(self.output_layer_n):
             for j in range(self.hidden_layer2_n):
                 self.links_visual_intensity3[i][j] = self.hidden_layer2_s[j] * self.hidden_layer2_w[j][i]

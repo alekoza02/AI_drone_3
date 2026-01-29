@@ -5,17 +5,24 @@ class Drone:
 
         self.reached_in_steps = 1e6
 
+        self.destination = [x, y]
+        self.steps_at_destination = 0
+        self.destinations_reached = 0
+        self.prev_step_validation = 0
+        self.now_step_validation = 0
+
         self.size = 50
         self.mass = self.size * 2
-        self.thrusters_multiplier = 100
-        self.gravity = .981
+        self.thrusters_multiplier = 1000
+        self.gravity = 9.81
         self.pos = [x, y]
         self.speed = [0, 0]
         self.rotation = 0
 
+        self.radius_application_point = self.size_perc(0.7)
         self.thrustets_center = [
-            [self.pos[0] - self.size_perc(0.7), self.pos[1]],
-            [self.pos[0] + self.size_perc(0.7), self.pos[1]]
+            [self.pos[0] - self.radius_application_point, self.pos[1]],
+            [self.pos[0] + self.radius_application_point, self.pos[1]]
         ]
         self.thrusters_power = [0, 0]
         self.thrustets_rotations_local = [0, 0]
@@ -28,6 +35,20 @@ class Drone:
         self.debug_visuals = []
 
     
+    def set_destination(self, destination):
+        self.destination = destination
+        self.steps_at_destination = 0
+
+
+    def update_step_validation(self, current_step):
+
+        if abs(self.prev_step_validation - current_step) > 1:
+            self.steps_at_destination = 0
+
+        self.prev_step_validation = self.now_step_validation
+        self.now_step_validation = current_step
+
+
     def size_perc(self, x):
         return self.size * x
 
@@ -112,7 +133,7 @@ class Drone:
         thr_1_tg = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_local[0]) + math.pi / 2)
         thr_2_tg = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_local[1]) + math.pi / 2)
 
-        torque = (thr_2_tg - thr_1_tg)
+        torque = (thr_2_tg - thr_1_tg) * self.radius_application_point * 10
 
         self.rotation += torque
 
