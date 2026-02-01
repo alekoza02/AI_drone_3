@@ -14,20 +14,31 @@ if PROFILING:
 
 W, H = 2000, 1000
 
-TRAIN = 0
-PLAY = 1
+
+import argparse
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument("-train", type=str, default="0")
+parser.add_argument("-play", type=str, default="1")
+
+args = parser.parse_args()
+
+TRAIN = args.train.lower() == "1"
+PLAY = args.play.lower() == "1"
 
 force_no_render = True
-visual_update = 1
+visual_update = 4
 dt_frame = 1
 elapsed = 0
 running = True
 
-N_agents = 2 ** 10
+N_agents = 2 ** 12
 max_training_steps = 600
-N_epoch = 2 ** 12
+N_epoch = 2 ** 13
 
 wavepoints = [[0.5 * W, 0.5 * H], [0.75 * W, 0.25 * H], [0.25 * W, 0.25 * H], [0.75 * W, 0.75 * H], [0.25 * W, 0.75 * H]]
+wavepoints.extend([[random() * W, random() * H] for i in range(10)])
 # wavepoints = [[0.75 * W, 0.25 * H], [0.25 * W, 0.25 * H], [0.75 * W, 0.75 * H], [0.25 * W, 0.75 * H]]
 
 prev_best = -1e9
@@ -44,7 +55,10 @@ arena.set_goal(wavepoints)
 if TRAIN:
 
     while not arena.training_finished:
-        
+
+        if arena.n_epoch % 4 == 0:
+            arena.save_best_NN('autosave.pkl')
+
         start_dt = perf_counter_ns()
 
         if not force_no_render:
@@ -67,7 +81,7 @@ if TRAIN:
             arena.current_epoch += 1
             if arena.current_epoch >= arena.n_epoch:
                 arena.training_finished = True
-                arena.save_best_NN('finished_training.pkl')
+                arena.save_best_NN('new.pkl')
             else:        
                 arena.start_next_epoch()
                 arena.train_single_step()
@@ -111,8 +125,8 @@ if TRAIN:
 
 if PLAY:
     drone = Drone(W*0.5, H*0.5)
-    agent = arena.load_best_NN('finished_training.pkl')
-    # agent = arena.load_best_NN('autosave.pkl')
+    # agent = arena.load_best_NN('finished_training.pkl')
+    agent = arena.load_best_NN('autosave.pkl')
 
     if r is None:
         r: Renderer = Renderer(W, H)
@@ -128,6 +142,8 @@ if PLAY:
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
+                    # agent = arena.load_best_NN('finished_training.pkl')
+                    agent = arena.load_best_NN('autosave.pkl')
                     drone = Drone(W*0.5, H*0.5)
 
             if event.type == pygame.QUIT:
