@@ -1,3 +1,6 @@
+import os
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+
 import pygame
 import math
 
@@ -72,7 +75,7 @@ class Renderer:
             v = int(max(-255, min(255, value)))
             color = [v / 2, v, v / 2] if v >= 0 else [-v, -v / 2, -v / 2]
             
-            self.render_line([pos[0] + link['start'][0], pos[1] + link['start'][1]], [pos[0] + link['end'][0], pos[1] + link['end'][1]], color, max(1, int(5 * link['intensity'])))
+            self.render_line([pos[0] + link['start'][0], pos[1] + link['start'][1]], [pos[0] + link['end'][0], pos[1] + link['end'][1]], color, max(0, int(5 * link['intensity'])))
 
     def render_drone(self, info):
         

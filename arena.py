@@ -60,7 +60,7 @@ class Arena:
             if self.agents_mask[index]:
 
                 if self.current_step == (self.max_steps - 1):
-                    self.agents_scores[index] += 50 # alive bonus
+                    self.agents_scores[index] += 10 # alive bonus
 
                 delta_ia, delta_physics = self.raw_step(drone, agent)
 
@@ -236,38 +236,39 @@ class Arena:
 
     def raw_step(self, drone, agent):
 
-
         inputs = [
-            (drone.destination[0] - drone.pos[0]) / self.arena_size[0],   # 1) to target X        
-            (drone.destination[1] - drone.pos[1]) / self.arena_size[1],   # 2) to target Y        
-            drone.speed[0] / 200,                          # 3) speed X        
-            drone.speed[1] / 200,                          # 4) speed Y        
-            cos(radians(drone.rotation)),                   # 5) cos angle        
-            sin(radians(drone.rotation)),                   # 6) sin angle
-            drone.angular_velocity / 2000,                         # 7) angular speed
-        ]
+                (drone.destination[0] - drone.pos[0]) / self.arena_size[0],   # 1) to target X        
+                (drone.destination[1] - drone.pos[1]) / self.arena_size[1],   # 2) to target Y        
+                drone.speed[0] / 200,                          # 3) speed X        
+                drone.speed[1] / 200,                          # 4) speed Y        
+                cos(radians(drone.rotation)),                   # 5) cos angle        
+                sin(radians(drone.rotation)),                   # 6) sin angle
+                drone.angular_velocity / 2000,                         # 7) angular speed
+            ]
 
-        self.max_inputs = [
-            max(i, j) for i, j in zip(self.max_inputs, inputs)
-        ]
-        self.min_inputs = [
-            min(i, j) for i, j in zip(self.min_inputs, inputs)
-        ]
+        # DEBUGGING
+        # self.max_inputs = [
+        #     max(i, j) for i, j in zip(self.max_inputs, inputs)
+        # ]
+        # self.min_inputs = [
+        #     min(i, j) for i, j in zip(self.min_inputs, inputs)
+        # ]
 
         start_ia = perf_counter_ns()
         output = agent.IA_step(inputs)
         stop_ia = perf_counter_ns()
         
-        self.max_outputs = [
-            max(i, j) for i, j in zip(self.max_outputs, output)
-        ]
-        self.min_outputs = [
-            min(i, j) for i, j in zip(self.min_outputs, output)
-        ]
+        # DEBUGGING
+        # self.max_outputs = [
+        #     max(i, j) for i, j in zip(self.max_outputs, output)
+        # ]
+        # self.min_outputs = [
+        #     min(i, j) for i, j in zip(self.min_outputs, output)
+        # ]
         
         # TODO ---> Need appropriate mapping
         drone.thrusters_power = [drone.thrusters_power[0] + min(0.2, max(-0.2, (output[0] + 1) * 0.5 - drone.thrusters_power[0])), drone.thrusters_power[1] + min(0.2, max(-0.2, (output[2] + 1) * 0.5 - drone.thrusters_power[1]))]
-        drone.thrustets_rotations_local = [drone.thrustets_rotations_local[0] + min(5, max(-5, output[1] * 45 - drone.thrustets_rotations_local[0])), drone.thrustets_rotations_local[1] + min(5, max(-5, output[3] * 45 - drone.thrustets_rotations_local[1]))]
+        drone.thrustets_rotations_local = [drone.thrustets_rotations_local[0] + min(15, max(-15, output[1] * 45 - drone.thrustets_rotations_local[0])), drone.thrustets_rotations_local[1] + min(15, max(-15, output[3] * 45 - drone.thrustets_rotations_local[1]))]
 
         start_physics = perf_counter_ns()    
         _ = drone.physics_simulation_step()

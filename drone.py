@@ -135,12 +135,24 @@ class Drone:
 
         torque = (thr_2_tg - thr_1_tg) * self.radius_application_point * 10
 
-        self.rotation += torque
+        # Calculate moment of inertia for rectangular body (uniform square/rect)
+        # I = m * (size^2) / 12
+        moment_of_inertia = self.mass * (self.size ** 2) / 12
 
-        self.angular_velocity += torque 
+        # Angular acceleration: α = τ / I
+        angular_acceleration = torque / moment_of_inertia
 
-        torque_cos = math.cos(math.radians(torque))
-        torque_sin = math.sin(math.radians(torque))
+        # Update angular velocity with damping (air resistance)
+        self.angular_velocity += angular_acceleration
+        self.angular_velocity *= 0.98
+
+        # Update rotation using angular velocity (proper physics integration)
+        self.rotation += self.angular_velocity
+
+        # Rotate thruster points around center of mass
+        rotation_delta_rad = math.radians(self.angular_velocity)
+        torque_cos = math.cos(rotation_delta_rad)
+        torque_sin = math.sin(rotation_delta_rad)
 
         x1 = self.thrustets_center[0][0] - self.pos[0]
         y1 = self.thrustets_center[0][1] - self.pos[1]  
@@ -152,8 +164,8 @@ class Drone:
         self.thrustets_center[1][0] = + x2 * torque_cos - y2 * torque_sin + self.pos[0]
         self.thrustets_center[1][1] = + x2 * torque_sin + y2 * torque_cos + self.pos[1]
                 
-        self.thrustets_rotations_global[0] += torque
-        self.thrustets_rotations_global[1] += torque
+        self.thrustets_rotations_global[0] += self.angular_velocity
+        self.thrustets_rotations_global[1] += self.angular_velocity
             
         self.debug_visuals = [delta_space_vector, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
 

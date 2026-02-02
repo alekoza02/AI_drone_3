@@ -92,7 +92,7 @@ class NeuralNetwork:
     
         # Allow negative values (avoid overflow)
         if type == 0:
-            return 2.0 / (1.0 + exp(-max(-60.0, min(60.0, value)))) - 1.0
+            return 2.0 / (1.0 + exp(-value)) - 1.0
     
         # Sigmoid
         if type == 1:
