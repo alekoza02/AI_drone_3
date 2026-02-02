@@ -14,6 +14,8 @@ class Renderer:
         self.clock = pygame.time.Clock()
         font_path = pygame.font.match_font("dejavusansmono")
         self.font = pygame.font.Font(font_path, 24)
+
+        self.sprite = pygame.image.load("textures/smoke.png").convert_alpha()
         
 
     def clear(self):
@@ -80,10 +82,38 @@ class Renderer:
     def render_drone(self, info):
         
         for key, value in info.items():
-            verteces = value['verteces']
-            verteces = self.rotate_verteces(verteces, value['global_rotation'], value['global_position'])
-            verteces = self.rotate_verteces(verteces, value['local_rotation'], value['local_position'])
-            self.render_polygon(verteces, value['color'])
+
+            if key != "particles":
+                verteces = value['verteces']
+                verteces = self.rotate_verteces(verteces, value['global_rotation'], value['global_position'])
+                verteces = self.rotate_verteces(verteces, value['local_rotation'], value['local_position'])
+                self.render_polygon(verteces, value['color'])
+
+            else:
+                for coord, life_step, max_life_step, radius, orientation in zip(value['coords'], value['life_step'], value['max_life_step'], value['radius'], value['orientation']):
+
+                    t = life_step / max_life_step
+
+                    # red (255,0,0) -> white (30,30,30)
+                    r = int(255 * (1 - t) + 30 * t)
+                    g = int(255 * (1 - t) + 50 * t)
+                    b = int(255 * (1 - t) + 50 * t)
+
+                    # color = [r, g, b]
+
+                    transformed_sprite = pygame.transform.rotozoom(self.sprite, -orientation, radius / 100)
+                    rect = transformed_sprite.get_rect(center=coord)
+
+                    # Apply fade
+                    fade_sprite = transformed_sprite.copy()
+                    alpha = int((1 - t) * 255)  # 0-255
+                    fade_sprite.fill((r, g, b, alpha), special_flags=pygame.BLEND_RGBA_MULT)
+
+                    self.screen.blit(fade_sprite, rect.topleft)
+
+                    # self.render_point(coord, color=color, radius=radius)
+
+
 
         # DEBUG VISUALIZATION OF ROTATION CENTERS
         # for key, value in info.items():

@@ -1,8 +1,12 @@
 import math
+import random
+
+gravity = 9.81
 
 class Drone:
-    def __init__(self, x, y):
+    def __init__(self, x, y, no_smoke=True):
 
+        self.no_smoke = no_smoke
         self.reached_in_steps = 1e6
 
         self.destination = [x, y]
@@ -14,7 +18,6 @@ class Drone:
         self.size = 50
         self.mass = self.size * 2
         self.thrusters_multiplier = 1000
-        self.gravity = 9.81
         self.pos = [x, y]
         self.speed = [0, 0]
         self.rotation = 0
@@ -33,6 +36,8 @@ class Drone:
         self.color_property_value = 1
 
         self.debug_visuals = []
+
+        self.reactor_particles = []
 
     
     def set_destination(self, destination):
@@ -55,6 +60,13 @@ class Drone:
 
     def get_drone_visual_info(self):
         return {
+            'particles' : {
+                'coords' : [[i.x, i.y] for i in self.reactor_particles],
+                'life_step' : [i.life_step for i in self.reactor_particles],
+                'max_life_step' : [i.life_max_step for i in self.reactor_particles],
+                'radius' : [i.radius for i in self.reactor_particles],
+                'orientation' : [i.orientation for i in self.reactor_particles]
+            },
             'corp' : {
                 'verteces' : [
                     [self.pos[0] - self.size_perc(0.5), self.pos[1] - self.size_perc(0.5)], 
@@ -102,70 +114,133 @@ class Drone:
         self.thrustets_rotations_global[1] = self.rotation + self.thrustets_rotations_local[1]
 
 
-    def physics_simulation_step(self):
-
+    def physics_simulation_step(self, step_dt):
+        # --- UPDATE THRUSTER GLOBAL ROTATION ---
         self.update_global_thruster_rotation()
 
-        # TRASLATION        
-        thr_1_x = - self.thrusters_power[0] * math.cos(math.radians(self.thrustets_rotations_global[0]) + math.pi / 2)
-        thr_1_y = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_global[0]) + math.pi / 2)
-        thr_2_x = - self.thrusters_power[1] * math.cos(math.radians(self.thrustets_rotations_global[1]) + math.pi / 2)
-        thr_2_y = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_global[1]) + math.pi / 2)
+        # =========================
+        # TRANSLATION (LINEAR)
+        # =========================
 
-        self.speed[0] += self.thrusters_multiplier * (thr_1_x + thr_2_x) / self.mass
-        self.speed[1] += self.thrusters_multiplier * (thr_1_y + thr_2_y) / self.mass + self.gravity
+        # Thrust force components (world frame)
+        thr_1_x = -self.thrusters_power[0] * math.cos(
+            math.radians(self.thrustets_rotations_global[0]) + math.pi / 2
+        )
+        thr_1_y = -self.thrusters_power[0] * math.sin(
+            math.radians(self.thrustets_rotations_global[0]) + math.pi / 2
+        )
 
-        delta_space_vector = [
-            self.speed[0],
-            self.speed[1],
-        ]
+        thr_2_x = -self.thrusters_power[1] * math.cos(
+            math.radians(self.thrustets_rotations_global[1]) + math.pi / 2
+        )
+        thr_2_y = -self.thrusters_power[1] * math.sin(
+            math.radians(self.thrustets_rotations_global[1]) + math.pi / 2
+        )
 
-        self.pos[0] += delta_space_vector[0]
-        self.pos[1] += delta_space_vector[1]
+        ax = self.thrusters_multiplier * (thr_1_x + thr_2_x) / self.mass
+        ay = self.thrusters_multiplier * (thr_1_y + thr_2_y) / self.mass + gravity
 
-        self.thrustets_center[0][0] += delta_space_vector[0]
-        self.thrustets_center[0][1] += delta_space_vector[1]
-        self.thrustets_center[1][0] += delta_space_vector[0]
-        self.thrustets_center[1][1] += delta_space_vector[1]
+        self.speed[0] += ax * step_dt
+        self.speed[1] += ay * step_dt
 
+        dx = self.speed[0] * step_dt
+        dy = self.speed[1] * step_dt
 
-        # ROTATION
-        thr_1_tg = - self.thrusters_power[0] * math.sin(math.radians(self.thrustets_rotations_local[0]) + math.pi / 2)
-        thr_2_tg = - self.thrusters_power[1] * math.sin(math.radians(self.thrustets_rotations_local[1]) + math.pi / 2)
+        self.pos[0] += dx
+        self.pos[1] += dy
+
+        # Move thruster centers with body
+        for i in range(2):
+            self.thrustets_center[i][0] += dx
+            self.thrustets_center[i][1] += dy
+
+        # =========================
+        # ROTATION (ANGULAR)
+        # =========================
+
+        thr_1_tg = -self.thrusters_power[0] * math.sin(
+            math.radians(self.thrustets_rotations_local[0]) + math.pi / 2
+        )
+        thr_2_tg = -self.thrusters_power[1] * math.sin(
+            math.radians(self.thrustets_rotations_local[1]) + math.pi / 2
+        )
 
         torque = (thr_2_tg - thr_1_tg) * self.radius_application_point * 10
 
-        # Calculate moment of inertia for rectangular body (uniform square/rect)
-        # I = m * (size^2) / 12
         moment_of_inertia = self.mass * (self.size ** 2) / 12
 
-        # Angular acceleration: α = τ / I
         angular_acceleration = torque / moment_of_inertia
 
-        # Update angular velocity with damping (air resistance)
-        self.angular_velocity += angular_acceleration
-        self.angular_velocity *= 0.98
+        self.angular_velocity += angular_acceleration * step_dt
 
-        # Update rotation using angular velocity (proper physics integration)
-        self.rotation += self.angular_velocity
+        rotation_delta = self.angular_velocity * step_dt
+        self.rotation += rotation_delta
 
-        # Rotate thruster points around center of mass
-        rotation_delta_rad = math.radians(self.angular_velocity)
-        torque_cos = math.cos(rotation_delta_rad)
-        torque_sin = math.sin(rotation_delta_rad)
+        # =========================
+        # DEBUG
+        # =========================
+        self.debug_visuals = [
+            [dx, dy],
+            [thr_1_x, thr_1_y],
+            [thr_2_x, thr_2_y],
+        ]
 
-        x1 = self.thrustets_center[0][0] - self.pos[0]
-        y1 = self.thrustets_center[0][1] - self.pos[1]  
-        x2 = self.thrustets_center[1][0] - self.pos[0]
-        y2 = self.thrustets_center[1][1] - self.pos[1]
+        # =========================
+        # SMOKE
+        # =========================
+        if not self.no_smoke:
+            [part.physics_step(step_dt) for part in self.reactor_particles]
 
-        self.thrustets_center[0][0] = + x1 * torque_cos - y1 * torque_sin + self.pos[0]
-        self.thrustets_center[0][1] = + x1 * torque_sin + y1 * torque_cos + self.pos[1]
-        self.thrustets_center[1][0] = + x2 * torque_cos - y2 * torque_sin + self.pos[0]
-        self.thrustets_center[1][1] = + x2 * torque_sin + y2 * torque_cos + self.pos[1]
+            for i in range(2):
+                self.reactor_particles.append(Smoke(
+                    self.thrustets_center[0][0] + math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[0])) * self.size_perc(0.3), 
+                    self.thrustets_center[0][1] + math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[0])) * self.size_perc(0.3), 
+                    (random.random() * 0.50 + 0.50 * self.thrusters_power[0]) * 13 / step_dt, 
+                    [random.random() * 0.4 + 0.6 * math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[0])), 
+                    random.random() * 0.4 + 0.6 * math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[0]))],
+                    15,
+                    10 * self.thrusters_power[0]
+                ))
                 
-        self.thrustets_rotations_global[0] += self.angular_velocity
-        self.thrustets_rotations_global[1] += self.angular_velocity
-            
-        self.debug_visuals = [delta_space_vector, [thr_1_x, thr_1_y], [thr_2_x, thr_2_y]]
+                self.reactor_particles.append(Smoke(
+                    self.thrustets_center[1][0] + math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[1])) * self.size_perc(0.3), 
+                    self.thrustets_center[1][1] + math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[1])) * self.size_perc(0.3), 
+                    (random.random() * 0.50 + 0.50 * self.thrusters_power[1]) * 13 / step_dt, 
+                    [random.random() * 0.4 + 0.6 * math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[1])), 
+                    random.random() * 0.4 + 0.6 * math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[1]))],
+                    15,
+                    10 * self.thrusters_power[1]
+                ))
 
+            self.reactor_particles = [i for i in self.reactor_particles if i.alive]
+
+
+
+
+class Smoke:
+    def __init__(self, x, y, speed, dir, life_average_step=10, initial_radius=5):
+        self.x = x
+        self.y = y
+        self.speed = speed
+        self.dir = dir
+        self.life_step = 0
+        self.radius = initial_radius
+        self.life_max_step = life_average_step + (life_average_step / 10) * random.random()
+        self.orientation = random.random() * 360
+        self.angular_speed = random.random() * 0.1
+
+
+    def physics_step(self, step_dt=1):
+        self.x += self.speed * self.dir[0] * step_dt
+        self.y += self.speed * self.dir[1] * step_dt
+
+        self.radius *= 1.15
+        self.speed *= 0.95
+        self.orientation += self.angular_speed * step_dt
+        
+        self.life_step += 1
+
+
+    @property
+    def alive(self):
+        return self.life_step < self.life_max_step
