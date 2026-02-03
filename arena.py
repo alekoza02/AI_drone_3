@@ -98,7 +98,7 @@ class Arena:
             # Not at target, reset accumulated time
             drone.steps_at_destination = 0
 
-        return r
+        return r * math.cos(math.radians(drone.rotation)) ** 2
 
 
 
@@ -138,8 +138,8 @@ class Arena:
         ELITES = max(4, int(self.n_agents * 0.1))
         TOURNAMENT_K = 5
 
-        MUT_P = 0.5          # per-parameter mutation probability
-        MUT_SIGMA = 0.1      # mutation std
+        MUT_P = 0.05          # per-parameter mutation probability
+        MUT_SIGMA = 0.2      # mutation std
         W_MAX = 3.0           # weight/bias clamp
 
         # ---------- helpers ----------

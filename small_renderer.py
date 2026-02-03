@@ -65,19 +65,19 @@ class Renderer:
         
         circles, links = info
 
-        for circle in circles:
-            value = circle['intensity'] * 255
-            v = int(max(-255, min(255, value)))
-            color = [v / 2, v, v / 2] if v >= 0 else [-v, -v / 2, -v / 2]
-
-            self.render_point([pos[0] + circle['x'], pos[1] + circle['y']], color, circle['radius'])
-        
         for link in links:
             value = (link['intensity'] * 2 - 1) * 255
             v = int(max(-255, min(255, value)))
             color = [v / 2, v, v / 2] if v >= 0 else [-v, -v / 2, -v / 2]
             
             self.render_line([pos[0] + link['start'][0], pos[1] + link['start'][1]], [pos[0] + link['end'][0], pos[1] + link['end'][1]], color, max(0, int(5 * link['intensity'])))
+        
+        for circle in circles:
+            value = circle['intensity'] * 255
+            v = int(max(-255, min(255, value)))
+            color = [v / 2, v, v / 2] if v >= 0 else [-v, -v / 2, -v / 2]
+
+            self.render_point([pos[0] + circle['x'], pos[1] + circle['y']], color, circle['radius'])
 
     def render_drone(self, info):
         
@@ -89,8 +89,12 @@ class Renderer:
                 verteces = self.rotate_verteces(verteces, value['local_rotation'], value['local_position'])
                 self.render_polygon(verteces, value['color'])
 
+                # DEBUG VISUALIZATION OF ROTATION CENTERS
+                # self.render_point(value['global_position'], [0, 255, 0])
+                # self.render_point(value['local_position'], [0, 0, 255])
+            
             else:
-                for coord, life_step, max_life_step, radius, orientation in zip(value['coords'], value['life_step'], value['max_life_step'], value['radius'], value['orientation']):
+                for coord, life_step, max_life_step, radius, ini_radius, orientation in zip(value['coords'], value['life_step'], value['max_life_step'], value['radius'], value['ini_radius'], value['orientation']):
 
                     t = life_step / max_life_step
 
@@ -98,8 +102,6 @@ class Renderer:
                     r = int(255 * (1 - t) + 30 * t)
                     g = int(255 * (1 - t) + 50 * t)
                     b = int(255 * (1 - t) + 50 * t)
-
-                    # color = [r, g, b]
 
                     transformed_sprite = pygame.transform.rotozoom(self.sprite, -orientation, radius / 100)
                     rect = transformed_sprite.get_rect(center=coord)
@@ -111,14 +113,15 @@ class Renderer:
 
                     self.screen.blit(fade_sprite, rect.topleft)
 
-                    # self.render_point(coord, color=color, radius=radius)
+                    r = int(255 * (1 - t) + 200 * t)
+                    g = int(255 * (1 - t) + 100 * t)
+                    b = int(255 * (1 - t) + 0 * t)
+
+                    color = [r, g, b]
+                    self.render_point(coord, color=color, radius= (ini_radius * 1.15 ** (- life_step)) / 2)
 
 
 
-        # DEBUG VISUALIZATION OF ROTATION CENTERS
-        # for key, value in info.items():
-        #     self.render_point(value['global_position'], [0, 255, 0])
-        #     self.render_point(value['local_position'], [0, 0, 255])
 
 
     def render_direction(self, pos, dir, scale=1):

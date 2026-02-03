@@ -65,6 +65,7 @@ class Drone:
                 'life_step' : [i.life_step for i in self.reactor_particles],
                 'max_life_step' : [i.life_max_step for i in self.reactor_particles],
                 'radius' : [i.radius for i in self.reactor_particles],
+                'ini_radius' : [i.radius0 for i in self.reactor_particles],
                 'orientation' : [i.orientation for i in self.reactor_particles]
             },
             'corp' : {
@@ -176,6 +177,19 @@ class Drone:
         rotation_delta = self.angular_velocity * step_dt
         self.rotation += rotation_delta
 
+        x1 = self.thrustets_center[0][0] - self.pos[0]  
+        y1 = self.thrustets_center[0][1] - self.pos[1]  
+        x2 = self.thrustets_center[1][0] - self.pos[0]
+        y2 = self.thrustets_center[1][1] - self.pos[1]
+
+        torque_cos = math.cos(math.radians(rotation_delta))
+        torque_sin = math.sin(math.radians(rotation_delta))
+
+        self.thrustets_center[0][0] = + x1 * torque_cos - y1 * torque_sin + self.pos[0]
+        self.thrustets_center[0][1] = + x1 * torque_sin + y1 * torque_cos + self.pos[1]
+        self.thrustets_center[1][0] = + x2 * torque_cos - y2 * torque_sin + self.pos[0]
+        self.thrustets_center[1][1] = + x2 * torque_sin + y2 * torque_cos + self.pos[1]
+            
         # =========================
         # DEBUG
         # =========================
@@ -193,21 +207,21 @@ class Drone:
 
             for i in range(2):
                 self.reactor_particles.append(Smoke(
-                    self.thrustets_center[0][0] + math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[0])) * self.size_perc(0.3), 
-                    self.thrustets_center[0][1] + math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[0])) * self.size_perc(0.3), 
+                    self.thrustets_center[0][0] + math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_global[0])) * self.size_perc(0.3), 
+                    self.thrustets_center[0][1] + math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_global[0])) * self.size_perc(0.3), 
                     (random.random() * 0.50 + 0.50 * self.thrusters_power[0]) * 13 / step_dt, 
-                    [random.random() * 0.4 + 0.6 * math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[0])), 
-                    random.random() * 0.4 + 0.6 * math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[0]))],
+                    [random.random() * 0.4 + 0.6 * math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_global[0])), 
+                    random.random() * 0.4 + 0.6 * math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_global[0]))],
                     15,
                     10 * self.thrusters_power[0]
                 ))
                 
                 self.reactor_particles.append(Smoke(
-                    self.thrustets_center[1][0] + math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[1])) * self.size_perc(0.3), 
-                    self.thrustets_center[1][1] + math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[1])) * self.size_perc(0.3), 
+                    self.thrustets_center[1][0] + math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_global[1])) * self.size_perc(0.3), 
+                    self.thrustets_center[1][1] + math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_global[1])) * self.size_perc(0.3), 
                     (random.random() * 0.50 + 0.50 * self.thrusters_power[1]) * 13 / step_dt, 
-                    [random.random() * 0.4 + 0.6 * math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_local[1])), 
-                    random.random() * 0.4 + 0.6 * math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_local[1]))],
+                    [random.random() * 0.4 + 0.6 * math.cos(math.pi / 2 + math.radians(self.thrustets_rotations_global[1])), 
+                    random.random() * 0.4 + 0.6 * math.sin(math.pi / 2 + math.radians(self.thrustets_rotations_global[1]))],
                     15,
                     10 * self.thrusters_power[1]
                 ))
@@ -225,6 +239,7 @@ class Smoke:
         self.dir = dir
         self.life_step = 0
         self.radius = initial_radius
+        self.radius0 = initial_radius
         self.life_max_step = life_average_step + (life_average_step / 10) * random.random()
         self.orientation = random.random() * 360
         self.angular_speed = random.random() * 0.1

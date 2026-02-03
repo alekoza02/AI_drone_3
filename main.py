@@ -12,9 +12,6 @@ if PROFILING:
     import yappi
     yappi.start()
 
-W, H = 2000, 1000
-
-
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -29,6 +26,7 @@ TRAIN = args.train.lower() == "1"
 PLAY = args.play.lower() == "1"
 RESUME = args.resume.lower() == "1"
 
+W, H = 2000, 1000
 force_no_render = True
 visual_update = 4
 dt_frame = 1
@@ -164,12 +162,12 @@ if PLAY:
             start_render = perf_counter_ns()
             r.clear()
 
-            delta_ia, delta_physics = arena.raw_step(drone, agent, step_dt=1)
+            delta_ia, delta_physics = arena.raw_step(drone, agent, step_dt=0.3)
 
             r.render_drone(drone.get_drone_visual_info())
             r.render_NN([0, 2 * H / 3], agent.get_NN_visual_info(W / 3, H / 3))
 
-            r.render_point(drone.destination, [255, 255, 0])
+            # r.render_point(drone.destination, [255, 255, 0])
             stop_render = perf_counter_ns()
             
             r.render_text(f" IA {delta_ia / 1000:3.0f}us | PHYSICS {delta_physics / 1000:4.0f}us | RENDER {(stop_render - start_render) / 1000:5.0f}us | FPS {1 / (dt_frame * 1e-9):5.0f} | LOADED MODEL: {loaded_model}", True, (255, 255, 255), (0, 0))
