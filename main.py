@@ -33,7 +33,7 @@ dt_frame = 1
 elapsed = 0
 running = True
 
-N_agents = 2 ** 10
+N_agents = 2 ** 12
 max_training_steps = 1800
 N_epoch = 2 ** 15
 
@@ -41,6 +41,13 @@ wavepoints = [[0.5 * W, 0.5 * H]]
 wavepoints.extend([[random() * W, random() * H] for i in range(50)])
 
 prev_best = -1e9
+
+
+recording = False
+frame_id = 0
+save_dir = "frames"
+os.makedirs(save_dir, exist_ok=True)
+
 
 if not force_no_render:
     r: Renderer = Renderer(W, H)
@@ -132,8 +139,8 @@ def reload_drone(arena, loaded_model):
 
 if PLAY:
 
-    loaded_model = 'autosave.pkl'
-    # loaded_model = 'finished_training.pkl'
+    # loaded_model = 'autosave.pkl'
+    loaded_model = 'finished_training.pkl'
     # loaded_model = 'new.pkl'
 
     drone, agent = reload_drone(arena, loaded_model)
@@ -154,8 +161,22 @@ if PLAY:
                 if event.key == pygame.K_r:
                     drone, agent = reload_drone(arena, loaded_model)
 
+                if event.key == pygame.K_s:
+                    recording = not recording
+                    if recording:
+                        frame_id = 0
+
             if event.type == pygame.QUIT:
                 running = False
+
+
+        if recording:
+            pygame.image.save(
+                r.screen,
+                f"{save_dir}/frame_{frame_id:06d}.png"
+            )
+            frame_id += 1
+
 
         try:
 
@@ -167,7 +188,11 @@ if PLAY:
             r.render_drone(drone.get_drone_visual_info())
             r.render_NN([0, 2 * H / 3], agent.get_NN_visual_info(W / 3, H / 3))
 
-            # r.render_point(drone.destination, [255, 255, 0])
+            dx = (drone.destination[0] - drone.pos[0]) / arena.arena_size[0]
+            dy = (drone.destination[1] - drone.pos[1]) / arena.arena_size[1]
+            d = (dx ** 2 + dy ** 2) ** 0.5
+
+            r.render_point(drone.destination, [max(0, min(1, d)) * 255, (1 - max(0, min(1, d))) * 255, 30])
             stop_render = perf_counter_ns()
             
             r.render_text(f" IA {delta_ia / 1000:3.0f}us | PHYSICS {delta_physics / 1000:4.0f}us | RENDER {(stop_render - start_render) / 1000:5.0f}us | FPS {1 / (dt_frame * 1e-9):5.0f} | LOADED MODEL: {loaded_model}", True, (255, 255, 255), (0, 0))

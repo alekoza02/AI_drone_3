@@ -138,8 +138,8 @@ class Arena:
         ELITES = max(4, int(self.n_agents * 0.1))
         TOURNAMENT_K = 5
 
-        MUT_P = 0.05          # per-parameter mutation probability
-        MUT_SIGMA = 0.2      # mutation std
+        MUT_P = 0.02          # per-parameter mutation probability
+        MUT_SIGMA = 0.005      # mutation std
         W_MAX = 3.0           # weight/bias clamp
 
         # ---------- helpers ----------
